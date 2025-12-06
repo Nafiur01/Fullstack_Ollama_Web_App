@@ -6,6 +6,8 @@ export default function Chat() {
   const [prompt, setPrompt] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState("");
+  const [credit, setCredit] = useState("");
 
   const sendPrompt = async () => {
     const bearerToken = localStorage.getItem("token");
@@ -18,13 +20,15 @@ export default function Chat() {
     setResponse("");
 
     try {
-      const response = await api.post(
+      const res = await api.post(
         `/generate?prompt=${encodeURIComponent(prompt)}`,
         {},
         config
       );
-      setResponse(response.data.response);
-      console.log(response.data.user);
+      setResponse(res.data.response);
+      setUser(res.data.user);
+      setCredit(res.data.remaining_credits);
+      console.log(res.data.user);
       setLoading(false);
     } catch (err) {
       console.log(err);
@@ -35,6 +39,7 @@ export default function Chat() {
 
   return (
     <div className="flex flex-col gap-2 min-h-screen w-max mx-auto justify-center items-center">
+      <h1>You are {user} and your remaining credit is:</h1>
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
