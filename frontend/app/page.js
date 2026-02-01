@@ -10,6 +10,10 @@ export default function Home() {
     router.push("/login");
   };
 
+  const register = () => {
+    router.push("/register");
+  }
+
   return (
     <div className="flex flex-col gap-2 min-h-screen justify-center items-center">
       <h1 className="font-bold text-2xl">Welcome to Ollama Chat App!</h1>
@@ -26,7 +30,7 @@ export default function Home() {
         >
           Login
         </button>
-        <button className="border px-5 py-2 rounded-2xl hover:bg-blue-400 hover:text-white transition-all duration-300">
+        <button onClick={register} className="border px-5 py-2 rounded-2xl hover:bg-blue-400 hover:text-white transition-all duration-300">
           Register
         </button>
       </div>

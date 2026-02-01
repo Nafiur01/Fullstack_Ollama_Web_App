@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 
+const API_PREFIX = process.env.NEXT_PUBLIC_API_PREFIX;
+
 export default function Chat() {
   const [prompt, setPrompt] = useState("");
   const [response, setResponse] = useState("");
@@ -12,7 +14,9 @@ export default function Chat() {
   const sendPrompt = async () => {
     const bearerToken = localStorage.getItem("token");
     const config = {
-      headers: { Authorization: `Bearer ${bearerToken}` },
+      method: "POST",
+      headers: {Authorization: `Bearer ${bearerToken}`},
+      "Content-Type": "application/json"
     };
 
     if (!prompt.trim()) return;
@@ -20,26 +24,51 @@ export default function Chat() {
     setResponse("");
 
     try {
-      const res = await api.post(
-        `/generate?prompt=${encodeURIComponent(prompt)}`,
-        {},
+      const res = await fetch(
+        `${API_PREFIX}/generate?prompt=${encodeURIComponent(prompt)}`,
         config
       );
-      setResponse(res.data.response);
-      setUser(res.data.user);
-      setCredit(res.data.remaining_credits);
-      console.log(res.data.user);
+      if (!res.body) throw new Error("No Response Body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while(true){
+        const {value,done} = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, {stream:true});
+
+        // split by new line 
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (const line of lines){
+          if(!line.trim()) continue;
+
+          const data = JSON.parse(line);
+          if (data.type === "meta"){
+            setUser(data.user);
+            setCredit(data.remaining_credits);
+          }else if(data.type === "chunk"){
+            setResponse((prev) => prev + data.response);
+          }else if(data.type === "end"){
+            setLoading(false);
+          }
+        }
+      }
       setLoading(false);
     } catch (err) {
       console.log(err);
       setLoading(false);
-      setResponse("💔 " + err.response.data.detail || "error occured");
+      setResponse("💔 " + "error occured");
     }
   };
 
   return (
     <div className="flex flex-col gap-2 min-h-screen w-max mx-auto justify-center items-center">
-      <h1>You are {user} and your remaining credit is:</h1>
+      {response ? <h1>You are <strong>{user}</strong> and your remaining credit is: <strong>{credit}</strong></h1> : null}
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}

@@ -5,7 +5,7 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
-    credits : Optional[int] = 5
+    credits : Optional[int] = 10
 
 class UserResponse(BaseModel):
     id: int

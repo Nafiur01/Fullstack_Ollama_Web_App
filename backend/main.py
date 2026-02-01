@@ -1,14 +1,18 @@
 from fastapi import FastAPI, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
-import models,schemas
+import models, schemas.user as user
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import StreamingResponse
 import ollama
 import os
+import json
 from typing import Annotated, List
 from database import engine
 from dotenv import load_dotenv
 from datetime import timedelta
 from auth import get_db,authenticate_user,get_password_hash,create_access_token,get_current_user,ACCESS_TOKEN_EXPIRE_MINUTES
+from fastapi.middleware.cors import CORSMiddleware
+from services.streaming_service_ollama import streaming_response
 
 load_dotenv()
 
@@ -17,12 +21,22 @@ models.Base.metadata.create_all(bind=engine)
 
 # ------------------ FastAPI Setup ------------------
 app = FastAPI()
+# for CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 # API_KEY_CREDITS = {os.getenv("API_KEY", "secretkey_api"): 3}
 
 
 # ------------------ Routes ------------------
 
-@app.post("/token",response_model=schemas.Token)
+@app.post("/token",response_model=user.Token)
 def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()],db: Session = Depends(get_db) ):
     """Authenticate and return a JWT access token."""
     user = authenticate_user(db,form_data.username, form_data.password)
@@ -41,8 +55,8 @@ def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depen
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.post("/register", response_model=schemas.UserResponse)
-def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+@app.post("/register", response_model=user.UserResponse)
+def register_user(user: user.UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(models.UserModel).filter(models.UserModel.email == user.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -53,7 +67,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user
 
-@app.get("/users", response_model = List[schemas.UserResponse])
+@app.get("/users", response_model = List[user.UserResponse])
 def read_users(db:Session = Depends(get_db)):
     users = db.query(models.UserModel).all()
     if not users:
@@ -61,14 +75,14 @@ def read_users(db:Session = Depends(get_db)):
     return users
 
 # get info for particular user
-@app.get("/users/{user_id}",response_model=schemas.UserResponse)
+@app.get("/users/{user_id}",response_model=user.UserResponse)
 def read_user(user_id:int,db:Session = Depends(get_db)):
     user = db.query(models.UserModel).filter(models.UserModel.id==user_id).first()
     if not user:
         raise HTTPException(status_code=404,detail="users not found")
     return user
 
-@app.post("/users/me",response_model=schemas.UserResponse)
+@app.post("/users/me",response_model=user.UserResponse)
 def read_users_me(current_user: models.UserModel=Depends(get_current_user)):
     return current_user
 
@@ -78,7 +92,7 @@ def return_str():
 
 
 @app.post("/generate")
-def generate(
+async def generate(
     prompt: str,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
@@ -89,16 +103,18 @@ def generate(
     try:
         response = ollama.chat(
                 model="mistral", 
-                messages=[{"role": "user", "content": prompt}])
+                messages=[{"role": "user", "content": prompt}],
+                stream=True,
+                )
     except Exception as e:
         raise HTTPException(status_code=500,detail=f"Ollama Error: {e}")
 
+    # streaming response 
+    stream = streaming_response(response=response,current_user=current_user)
+    
+    
     current_user.credits -= 1
     db.commit()
     db.refresh(current_user)
 
-    return {
-        "user": current_user.username,
-        "response": response["message"]["content"],
-        "remaining_credits": current_user.credits
-    }
+    return StreamingResponse(content=stream,media_type="application/x-ndjson")

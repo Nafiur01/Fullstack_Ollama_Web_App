@@ -11,16 +11,18 @@ export default function Login() {
 
   const onSubmit = async (data) => {
     try {
-      const formData = new URLSearchParams();
+      const formData = new URLSearchParams(); 
       formData.append("username", data.username);
+      formData.append("email",data.email)
       formData.append("password", data.password);
+      const obj = Object.fromEntries(formData);
+      const json = JSON.stringify(obj);
 
-      const res = await api.post("/token", formData, {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      const res = await api.post("/register", json, {
+        headers: { "Content-Type": "application/json"},
       });
       <Loading />;
-      localStorage.setItem("token", res.data.access_token);
-      router.push("/chat");
+      router.push("/login");
     } catch (e) {
       alert("Invalid Credentials");
     }
@@ -29,7 +31,7 @@ export default function Login() {
   return (
     <div className="flex flex-col min-h-screen justify-center items-center">
       <h1 className="text-2xl font-bold mb-10">
-        Are you ready to chat with Ollama Model?
+        Register yourself &amp; enjoy Ollama
       </h1>
       <form
         onSubmit={handleSubmit(onSubmit)}
@@ -42,6 +44,11 @@ export default function Login() {
           className="border-2 p-2 border-gray-300 rounded-xl placeholder-gray-300"
         />
         <input
+          placeholder="email"
+          {...register("email")}
+          className="border-2 p-2 border-gray-300 rounded-xl placeholder-gray-300"
+        />
+        <input
           type="password"
           placeholder="password"
           {...register("password")}
@@ -49,7 +56,7 @@ export default function Login() {
         />
         <div className="flex items-center justify-center">
           <button className="text-white bg-black rounded-md px-6 py-2 w-max flex hover:scale-110 transition-all">
-            Login
+            Register
           </button>
         </div>
       </form>
